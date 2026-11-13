@@ -1,0 +1,84 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["android-v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # Пакет по умолчанию "tools" Google убрал — sdkmanager падает.
+          packages: platform-tools
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      # Постоянный ключ подписи из секретов. Без него обновление поверх
+      # установленной версии не встаёт (каждый раннер — свой debug-ключ).
+      # В pull_request секретов нет — там собирается только debug.
+      - name: Release keystore
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          if [ -n "$ANDROID_KEYSTORE_FILE" ]; then
+            ./gradlew assembleRelease --no-daemon --stacktrace
+            dir=app/build/outputs/apk/release
+          else
+            ./gradlew assembleDebug --no-daemon --stacktrace
+            dir=app/build/outputs/apk/debug
+          fi
+          ver=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p out
+          cp "$(find "$dir" -name '*.apk' | head -1)" "out/SdVPN-$ver.apk"
+          ls -la out
+          # Чем подписан (для сверки отпечатка с ключом в F:\1\Star\server\android-release\sdvpn-release.jks).
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" verify --print-certs out/*.apk | grep -E "SHA-256|Signer" || true
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SdVPN
+          path: out/*.apk
+
+      # Если пушим tag android-vX.Y.Z — создаём GitHub Release и заливаем APK
+      # (приложение берёт обновления из releases/latest).
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          generate_release_notes: true

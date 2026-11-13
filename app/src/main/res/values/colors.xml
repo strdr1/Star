@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Палитра Star: фиолетово-красная. Акцент C44BFF (как звезда),
+         вторичный FF3D6E (розово-красный) для деструктивных действий. -->
+    <color name="accent">#C44BFF</color>
+    <color name="accent2">#FF3D6E</color>
+    <color name="text_hi">#F5EAFF</color>
+    <color name="text_lo">#9080A0</color>
+    <color name="bg_top">#1A0820</color>
+    <color name="bg_mid">#0B0410</color>
+    <color name="bg_bottom">#16040E</color>
+
+    <!-- Для статус-бара -->
+    <color name="status_bar">#0B0410</color>
+</resources>
