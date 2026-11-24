@@ -19,3 +19,4 @@ local.properties
 # Файлы ОС
 .DS_Store
 Thumbs.db
+app/libs/*.aar

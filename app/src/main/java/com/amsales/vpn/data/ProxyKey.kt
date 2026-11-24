@@ -17,7 +17,8 @@ import java.net.URLDecoder
  *   tuic://uuid:password@host:port?congestion_control=&alpn=#name
  *
  * Транспорты vless/vmess/trojan: tcp, ws, grpc, httpupgrade, http (h2).
- * xhttp/splithttp/kcp/quic sing-box не умеет — такие ключи парсятся, но
+ * xhttp (он же splithttp) умеет движок sing-box-lx, который идёт в комплекте.
+ * kcp/quic sing-box не умеет — такие ключи парсятся, но
  * помечаются [unsupported] и в подключение не идут.
  */
 data class ProxyKey(
@@ -44,6 +45,7 @@ data class ProxyKey(
     val path: String = "",
     val hostHeader: String = "",
     val serviceName: String = "",
+    val xhttpMode: String = "",  // xhttp: mode (auto/packet-up/stream-up/stream-one)
     val obfs: String = "",
     val obfsPassword: String = "",
     val congestion: String = "",
@@ -114,6 +116,7 @@ data class ProxyKey(
                         pbk = q["pbk"].orEmpty(), sid = q["sid"].orEmpty(),
                         alpn = s.alpn, insecure = s.insecure, path = s.path,
                         hostHeader = q["host"].orEmpty(), serviceName = q["serviceName"].orEmpty(),
+                        xhttpMode = q["mode"].orEmpty(),
                         unsupported = s.unsupported,
                     ).takeIf { it.uuid.isNotEmpty() }
                 }
@@ -126,6 +129,7 @@ data class ProxyKey(
                         pbk = q["pbk"].orEmpty(), sid = q["sid"].orEmpty(),
                         alpn = s.alpn, insecure = s.insecure, path = s.path,
                         hostHeader = q["host"].orEmpty(), serviceName = q["serviceName"].orEmpty(),
+                        xhttpMode = q["mode"].orEmpty(),
                         unsupported = s.unsupported,
                     ).takeIf { it.password.isNotEmpty() }
                 }
@@ -221,12 +225,13 @@ data class ProxyKey(
         private fun normalizeType(t: String) = when (t) {
             "", "raw" -> "tcp"
             "h2" -> "http"
+            "splithttp" -> "xhttp"   // старое имя xhttp
             else -> t
         }
 
-        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http")
+        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http", "xhttp")
 
-        /** "" если транспорт поддерживается, иначе его имя (xhttp, kcp…). */
+        /** "" если транспорт поддерживается, иначе его имя (kcp, quic…). */
         private fun transportProblem(type: String) =
             if (type in SUPPORTED_TRANSPORTS) "" else type
 

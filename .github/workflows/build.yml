@@ -48,6 +48,16 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
+      # sing-box-lx engine (sing-box + xhttp transport). Pinned by checksum.
+      - name: Fetch libbox (sing-box-lx)
+        env:
+          LX_VERSION: 1.14.4-lx.35
+          LX_SHA256: e5cfd79364316150acd5c9ddbb5d6d8c749f1ce4a590f9a3eaa408f949b8fd7b
+        run: |
+          mkdir -p app/libs
+          curl -fsSL -o app/libs/libbox-lx.aar             "https://github.com/Leadaxe/sing-box-lx/releases/download/v${LX_VERSION}/libbox-${LX_VERSION}.aar"
+          echo "${LX_SHA256}  app/libs/libbox-lx.aar" | sha256sum -c -
+
       - name: Build APK
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

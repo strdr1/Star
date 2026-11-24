@@ -12,8 +12,8 @@ android {
         applicationId = "com.strdr1.star"
         minSdk = 24       // Android 7.0 — VpnService.addDisallowedApplication работает с API 21+
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         // Собираем APK только для ARM (arm64 + armv7). На x86-эмуляторе
         // запускать смысла нет — у юзера телефоны.
@@ -112,5 +112,7 @@ dependencies {
     // libbox — sing-box как Android-библиотека (JitPack)
     // Содержит Libbox.newCommandServer / CommandServer.startOrReloadService
     // + PlatformInterface (15 методов) — это и есть наш реальный движок.
-    implementation("com.github.singbox-android:libbox:1.13.12")
+    // sing-box-lx build (same API, adds the xhttp transport). The AAR is not on a Maven
+    // repo: CI downloads it into app/libs (see .github/workflows/build.yml).
+    implementation(files("libs/libbox-lx.aar"))
 }
