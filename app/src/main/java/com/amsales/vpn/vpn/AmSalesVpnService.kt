@@ -77,6 +77,7 @@ class AmSalesVpnService : VpnService() {
     private var commandServer: CommandServer? = null
     private var platformInterface: AmSalesPlatformInterface? = null
     private var dpiServer: com.amsales.vpn.dpi.DpiSocksServer? = null
+    private var rawtun: RawtunClient? = null
     private var statsJob: Job? = null
     private var checkJob: Job? = null
     private var activeServers: List<ProxyKey> = emptyList()
@@ -171,6 +172,14 @@ class AmSalesVpnService : VpnService() {
                 return
             }
             activeServers = servers
+            // rawtun key: bring the UDP-Lite wrapper up before sing-box starts dialing it.
+            // All rawtun keys in "Auto" share one wrapper, so they must point at one server.
+            rawtun?.stop(); rawtun = null
+            servers.firstOrNull { it.rawtun }?.let { k ->
+                val rc = RawtunClient(this@AmSalesVpnService, k.host)
+                rc.start()?.let { err -> throw IllegalStateException(err) }
+                rawtun = rc
+            }
             val serversLabel = when {
                 servers.size > 1 -> "Авто"
                 else -> servers.firstOrNull()?.tag ?: "?"
@@ -490,6 +499,8 @@ class AmSalesVpnService : VpnService() {
     private fun cleanup() {
         try { dpiServer?.stop() } catch (_: Exception) {}
         dpiServer = null
+        try { rawtun?.stop() } catch (_: Exception) {}
+        rawtun = null
         // Чистим session-папки старее 30 секунд (не текущую — sing-box ещё
         // может писать в неё лог).
         try {
