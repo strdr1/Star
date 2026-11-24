@@ -49,6 +49,9 @@ data class ProxyKey(
     val congestion: String = "",
     val udpRelayMode: String = "",
     val unsupported: String = "", // непусто → sing-box такое не умеет (причина)
+    // rawtun=1 in a hysteria2 key: the UDP stream goes inside IP protocol 136 (UDP-Lite) to
+    // pass an ISP block of TCP/UDP/ICMP to the server IP. See vpn/RawtunClient.
+    val rawtun: Boolean = false,
 ) {
     val isSupported: Boolean get() = unsupported.isEmpty()
 
@@ -152,6 +155,8 @@ data class ProxyKey(
                         insecure = isTrue(q["insecure"]) || isTrue(q["allowInsecure"]),
                         obfs = q["obfs"].orEmpty(), obfsPassword = q["obfs-password"].orEmpty(),
                         alpn = splitList(q["alpn"]),
+                        // The wrapper needs an IPv4 address, not a name.
+                        rawtun = isTrue(q["rawtun"]) && IPV4.matches(p.host),
                     ).takeIf { it.password.isNotEmpty() }
                 }
                 "tuic" -> ProxyKey(
@@ -223,6 +228,8 @@ data class ProxyKey(
             "h2" -> "http"
             else -> t
         }
+
+        private val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
         private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http")
 

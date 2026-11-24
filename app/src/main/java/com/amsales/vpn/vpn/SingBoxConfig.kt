@@ -168,8 +168,9 @@ object SingBoxConfig {
         val ob = JSONObject()
             .put("type", k.proto)
             .put("tag", tag)
-            .put("server", k.host)
-            .put("server_port", k.port)
+            // rawtun: sing-box dials the local wrapper; SNI/obfs/password stay the server's.
+            .put("server", if (k.rawtun) "127.0.0.1" else k.host)
+            .put("server_port", if (k.rawtun) RawtunClient.LOCAL_PORT else k.port)
 
         fun alpnArr() = JSONArray().also { a -> k.alpn.forEach { a.put(it) } }
 
@@ -250,7 +251,7 @@ object SingBoxConfig {
             }
             "hysteria2" -> {
                 ob.put("password", k.password)
-                if (k.portRange.isNotEmpty()) {
+                if (k.portRange.isNotEmpty() && !k.rawtun) {
                     val ports = JSONArray()
                     k.portRange.split(',').forEach { ports.put(it.replace('-', ':')) }
                     ob.put("server_ports", ports)
