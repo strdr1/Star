@@ -112,7 +112,5 @@ dependencies {
     // libbox — sing-box как Android-библиотека (JitPack)
     // Содержит Libbox.newCommandServer / CommandServer.startOrReloadService
     // + PlatformInterface (15 методов) — это и есть наш реальный движок.
-    // sing-box-lx build (same API, adds the xhttp transport). The AAR is not on a Maven
-    // repo: CI downloads it into app/libs (see .github/workflows/build.yml).
-    implementation(files("libs/libbox-lx.aar"))
+    implementation("com.github.singbox-android:libbox:1.13.12")
 }

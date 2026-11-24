@@ -17,8 +17,7 @@ import java.net.URLDecoder
  *   tuic://uuid:password@host:port?congestion_control=&alpn=#name
  *
  * Транспорты vless/vmess/trojan: tcp, ws, grpc, httpupgrade, http (h2).
- * xhttp (он же splithttp) умеет движок sing-box-lx, который идёт в комплекте.
- * kcp/quic sing-box не умеет — такие ключи парсятся, но
+* xhttp/splithttp/kcp/quic sing-box не умеет — такие ключи парсятся, но
  * помечаются [unsupported] и в подключение не идут.
  */
 data class ProxyKey(
@@ -230,13 +229,12 @@ data class ProxyKey(
         private fun normalizeType(t: String) = when (t) {
             "", "raw" -> "tcp"
             "h2" -> "http"
-            "splithttp" -> "xhttp"   // старое имя xhttp
             else -> t
         }
 
         private val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
-        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http", "xhttp")
+        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http")
 
         /** "" если транспорт поддерживается, иначе его имя (kcp, quic…). */
         private fun transportProblem(type: String) =
