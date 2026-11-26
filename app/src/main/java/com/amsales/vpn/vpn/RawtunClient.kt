@@ -40,6 +40,7 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         const val LOCAL_PORT = 44300
         private const val TAG = "Rawtun"
         private const val IPPROTO_UDPLITE = 136
+        private const val UDPLITE_RECV_CSCOV = 11  // accept datagrams whose coverage >= this
         private const val CONTROL_PORT = 7     // server: control packets
         private const val DATA_PORT = 443      // server: tunnelled datagrams
         private const val MODE_STANDARD = 0    // NAT fixes the checksum itself
@@ -65,6 +66,13 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         }
         sock = s
         try {
+            // Accept partial-coverage UDP-Lite datagrams (coverage >= 8). Without this the
+            // kernel silently drops every reply whose checksum coverage is below its length.
+            try {
+                Os.setsockoptInt(s, IPPROTO_UDPLITE, UDPLITE_RECV_CSCOV, 8)
+            } catch (e: Exception) {
+                Log.w(TAG, "RECV_CSCOV: ${e.message}")
+            }
             // protect() so the UDP-Lite socket bypasses our own TUN. Use the raw int fd
             // (getInt$ via reflection on the FileDescriptor) and, as a fallback, a dup.
             val rawFd = try {
