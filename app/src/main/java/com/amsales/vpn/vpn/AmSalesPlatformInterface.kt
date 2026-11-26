@@ -22,6 +22,7 @@ import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.LocalDNSTransport
 import io.nekohasekai.libbox.NetworkInterface
 import io.nekohasekai.libbox.NetworkInterfaceIterator
+import io.nekohasekai.libbox.NeighborUpdateListener
 import io.nekohasekai.libbox.Notification
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.StringIterator
@@ -504,6 +505,8 @@ class AmSalesPlatformInterface(
     override fun registerMyInterface(interfaceName: String?) {}
     override fun tailscaleHostname(): String = ""
     override fun cancelNotification(identifier: String?, id: Int) {}
+    override fun startNeighborMonitor(listener: NeighborUpdateListener?) {}
+    override fun closeNeighborMonitor(listener: NeighborUpdateListener?) {}
 
     companion object {
         private const val TAG = "AmSalesPlatform"
