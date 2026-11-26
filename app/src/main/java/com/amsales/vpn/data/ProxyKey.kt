@@ -229,12 +229,13 @@ data class ProxyKey(
         private fun normalizeType(t: String) = when (t) {
             "", "raw" -> "tcp"
             "h2" -> "http"
+            "splithttp" -> "xhttp"
             else -> t
         }
 
         private val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
-        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http")
+        private val SUPPORTED_TRANSPORTS = setOf("tcp", "ws", "grpc", "httpupgrade", "http", "xhttp")
 
         /** "" если транспорт поддерживается, иначе его имя (kcp, quic…). */
         private fun transportProblem(type: String) =

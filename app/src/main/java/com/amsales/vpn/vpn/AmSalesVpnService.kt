@@ -216,10 +216,6 @@ class AmSalesVpnService : VpnService() {
             val tmpDir = File(applicationContext.cacheDir, "sing-box-$sessionId").apply { mkdirs() }
             val stderrPath = File(applicationContext.filesDir, "stderr.log").absolutePath
 
-            stage("redirectStderr") {
-                try { Libbox.redirectStderr(stderrPath) }
-                catch (e: Throwable) { Log.w(TAG, "redirectStderr fail: ${e.message}") }
-            }
 
             stage("Libbox.setup") {
                 val setup = SetupOptions().apply {
@@ -248,6 +244,8 @@ class AmSalesVpnService : VpnService() {
                     scope.launch { disconnect() }
                 }
                 override fun setSystemProxyEnabled(enabled: Boolean) {}
+                override fun connectSSHAgent(): Int = 0
+                override fun triggerNativeCrash() {}
                 override fun writeDebugMessage(message: String?) {
                     if (!message.isNullOrEmpty()) Log.d("sing-box", message)
                 }
@@ -439,10 +437,15 @@ class AmSalesVpnService : VpnService() {
 
     private fun startTunnelCheck(isHybrid: Boolean) {
         checkJob?.cancel()
+        // rawtun adds a wrapper + UDP-Lite handshake before hy2's QUIC even starts, so the
+        // first probes legitimately fail for a few seconds. Give it a longer warm-up and more
+        // attempts, and never tear the tunnel down on probe failures (only on real "no API").
+        val viaRawtun = activeServers.any { it.rawtun }
         checkJob = scope.launch {
-            delay(2500)
+            delay(if (viaRawtun) 6000 else 2500)
             var failures = 0
-            for (attempt in 0 until 3) {
+            val attempts = if (viaRawtun) 6 else 3
+            for (attempt in 0 until attempts) {
                 if (!isRunning) return@launch
                 val d = proxyDelay(groupTest = activeServers.size > 1 && attempt == 0)
                 if (d < 0) {
@@ -464,6 +467,13 @@ class AmSalesVpnService : VpnService() {
                 delay(2000)
             }
             if (!isRunning) return@launch
+            // rawtun: data clearly flows at the packet level even when the HTTP probe is flaky,
+            // so never auto-disconnect — just keep the tunnel and let the user judge.
+            if (viaRawtun) {
+                Log.w(TAG, "tunnel check: rawtun warm-up, keeping tunnel ($failures probe failures)")
+                refreshActiveTag(isHybrid)
+                return@launch
+            }
             // Рвём туннель, только если API трижды ответил «трафик не прошёл».
             if (failures < 3) {
                 Log.w(TAG, "tunnel check inconclusive ($failures failures) — keeping tunnel")

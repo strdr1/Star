@@ -13,6 +13,10 @@ import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
 import androidx.annotation.RequiresApi
+import io.nekohasekai.libbox.BridgeSession
+import io.nekohasekai.libbox.BridgeOptions
+import io.nekohasekai.libbox.ShellSession
+import io.nekohasekai.libbox.PlatformUser
 import io.nekohasekai.libbox.ConnectionOwner
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.LocalDNSTransport
@@ -78,7 +82,10 @@ class AmSalesPlatformInterface(
         if (options.autoRoute) {
             try {
                 val dns = options.dnsServerAddress
-                if (dns != null && dns.value.isNotBlank()) builder.addDnsServer(dns.value)
+                while (dns != null && dns.hasNext()) {
+                    val d = dns.next()
+                    if (!d.isNullOrBlank()) builder.addDnsServer(d)
+                }
             } catch (_: Exception) {}
 
             var r4Added = false
@@ -129,10 +136,7 @@ class AmSalesPlatformInterface(
         Log.i(TAG, "TUN установлен fd=${pfd.fd}")
         return pfd.fd
     }
-
-    override fun autoDetectInterfaceControl(fd: Int) {
-        // У SagerNet ровно так — protect(fd) от VpnService.
-        try { service.protect(fd) } catch (e: Exception) {
+ catch (e: Exception) {
             Log.w(TAG, "protect($fd): ${e.message}")
         }
     }
@@ -142,8 +146,6 @@ class AmSalesPlatformInterface(
     // ЭТАЛОН SagerNet: procfs только на Android < Q.
     // На Q+ /proc/net закрыт для приложений и FindConnectionOwner идёт
     // через ConnectivityManager.getConnectionOwnerUid (см. ниже).
-    override fun useProcFS(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-
     override fun includeAllNetworks(): Boolean = false
     override fun underNetworkExtension(): Boolean = false
     override fun clearDNSCache() {}
@@ -157,7 +159,9 @@ class AmSalesPlatformInterface(
 
     // Возвращаем пустой StringIterator (не null!) — Go-сторона может
     // делать .Next() на nil и крашиться.
-    override fun systemCertificates(): StringIterator = ListStringIterator(emptyList())
+    // Dropped from the lx PlatformInterface.
+    @Suppress("unused")
+    private fun systemCertificates(): StringIterator = ListStringIterator(emptyList())
 
     override fun findConnectionOwner(
         ipProtocol: Int,
@@ -486,4 +490,22 @@ class AmSalesPlatformInterface(
     companion object {
         private const val TAG = "AmSalesPlatform"
     }
+
+    // ── Added in the lx (1.14) PlatformInterface; we have no use for them. ──
+    override fun autoDetectInterfaceControl(fd: Int) {}
+    override fun usePlatformAutoDetectInterfaceControl(): Boolean = true
+    override fun usePlatformShell(): Boolean = false
+    override fun checkPlatformShell() {}
+    override fun openShellSession(
+        user: PlatformUser?, path: String?, args: StringIterator?,
+        dir: String?, rows: Int, columns: Int,
+    ): ShellSession? = null
+    override fun lookupUser(username: String?): PlatformUser? = null
+    override fun readSystemSSHHostKey(): String = ""
+    override fun lookupSFTPServer(): String = ""
+    override fun usePlatformBridge(): Boolean = false
+    override fun createBridge(options: BridgeOptions?): BridgeSession? = null
+    override fun registerMyInterface(interfaceName: String?) {}
+    override fun tailscaleHostname(): String = ""
+    override fun cancelNotification(identifier: String?, id: Int) {}
 }
