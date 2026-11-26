@@ -40,6 +40,7 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         const val LOCAL_PORT = 44300
         private const val TAG = "Rawtun"
         private const val IPPROTO_UDPLITE = 136
+        private const val UDPLITE_RECV_CSCOV = 11  // accept datagrams whose coverage >= this
         private const val CONTROL_PORT = 7     // server: control packets
         private const val DATA_PORT = 443      // server: tunnelled datagrams
         private const val MODE_STANDARD = 0    // NAT fixes the checksum itself
@@ -65,8 +66,31 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         }
         sock = s
         try {
-            // protect() takes an int fd; a dup shares the same socket, so the mark sticks.
-            ParcelFileDescriptor.dup(s).use { if (!vpn.protect(it.fd)) Log.w(TAG, "protect() returned false") }
+            // Accept partial-coverage UDP-Lite datagrams (coverage >= 8). Without this the
+            // kernel silently drops every reply whose checksum coverage is below its length.
+            try {
+                Os.setsockoptInt(s, IPPROTO_UDPLITE, UDPLITE_RECV_CSCOV, 8)
+            } catch (e: Exception) {
+                Log.w(TAG, "RECV_CSCOV: ${e.message}")
+            }
+            // protect() so the UDP-Lite socket bypasses our own TUN. Use the raw int fd
+            // (getInt$ via reflection on the FileDescriptor) and, as a fallback, a dup.
+            val rawFd = try {
+                val m = FileDescriptor::class.java.getDeclaredMethod("getInt\$").apply { isAccessible = true }
+                m.invoke(s) as Int
+            } catch (_: Exception) { -1 }
+            val protectedOk = when {
+                rawFd >= 0 -> vpn.protect(rawFd)
+                else -> ParcelFileDescriptor.dup(s).use { vpn.protect(it.fd) }
+            }
+            Log.i(TAG, "UDP-Lite socket fd=$rawFd protect=$protectedOk")
+
+            // Bind the local port FIRST, so sing-box can connect even while we probe the server.
+            val l = DatagramSocket(null)
+            l.reuseAddress = true
+            l.bind(InetSocketAddress(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), LOCAL_PORT))
+            local = l
+            Log.i(TAG, "listening on 127.0.0.1:$LOCAL_PORT")
 
             val localIp = localAddressTowards(server)
                 ?: return fail("Не удалось определить адрес телефона в сети.")
@@ -75,9 +99,9 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
             running = true
             thread(name = "rawtun-down", isDaemon = true) { downlink(s) }
 
-            // Ask for both checksum variants, up to 3 times.
+            // Ask for both checksum variants, up to 5 times (~3.5 s total).
             val hello = "RTUNH".toByteArray() + ipBytes
-            for (i in 0 until 3) {
+            for (i in 0 until 5) {
                 Os.sendto(s, hello, 0, hello.size, 0, server, CONTROL_PORT)
                 if (helloLatch.await(700, TimeUnit.MILLISECONDS)) break
             }
@@ -92,10 +116,6 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
             Os.sendto(s, modeMsg, 0, modeMsg.size, 0, server, CONTROL_PORT)
             Log.i(TAG, "server $serverIp reachable over UDP-Lite, checksum mode $mode, local $localIp")
 
-            val l = DatagramSocket(null)
-            l.reuseAddress = true
-            l.bind(InetSocketAddress(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), LOCAL_PORT))
-            local = l
             thread(name = "rawtun-up", isDaemon = true) { uplink(s, l, server) }
             // The server keeps the mode per (address, port); repeat it so a NAT rebinding
             // (new source port) does not silently fall back to the standard checksum.
@@ -164,12 +184,13 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
                 if (Os.poll(fds, 500) <= 0) continue
                 val n = Os.recvfrom(s, buf, 0, buf.size, 0, from)
                 if (n <= 0) continue
-                if (from.port == CONTROL_PORT) {
-                    if (n >= 5 && buf[0] == 'R'.code.toByte() && buf[3] == 'N'.code.toByte()) {
-                        when (buf[4].toInt().toChar()) {
-                            'A' -> { gotStandard = true; helloLatch.countDown() }
-                            'B' -> { gotCompensated = true; helloLatch.countDown() }
-                        }
+                // Tell control from data by the payload marker, not by the socket port: a
+                // UDP-Lite datagram socket does not report a meaningful source port here.
+                if (n >= 5 && buf[0] == 'R'.code.toByte() && buf[1] == 'T'.code.toByte() &&
+                    buf[2] == 'U'.code.toByte() && buf[3] == 'N'.code.toByte()) {
+                    when (buf[4].toInt().toChar()) {
+                        'A' -> { gotStandard = true; helloLatch.countDown() }
+                        'B' -> { gotCompensated = true; helloLatch.countDown() }
                     }
                     continue
                 }
