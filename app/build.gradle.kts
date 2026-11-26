@@ -12,8 +12,8 @@ android {
         applicationId = "com.strdr1.star"
         minSdk = 24       // Android 7.0 — VpnService.addDisallowedApplication работает с API 21+
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.3.1"
 
         // Собираем APK только для ARM (arm64 + armv7). На x86-эмуляторе
         // запускать смысла нет — у юзера телефоны.

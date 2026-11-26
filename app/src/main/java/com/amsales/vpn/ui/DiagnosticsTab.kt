@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,6 +53,8 @@ fun DiagnosticsTab() {
         scope.launch {
             log = withContext(Dispatchers.IO) {
                 buildString {
+                    appendLine("=== SdVPN " + com.amsales.vpn.BuildConfig.VERSION_NAME + " (" + android.os.Build.MODEL + ", Android " + android.os.Build.VERSION.RELEASE + ") ===")
+                    appendLine()
                     appendLine("=== CRASH.LOG (наши Java-исключения) ===")
                     appendLine(readFile(File(ctx.filesDir, "crash.log")))
                     appendLine()
@@ -93,9 +96,17 @@ fun DiagnosticsTab() {
             IconButton(onClick = { shareLog(ctx, log) }) {
                 Icon(Icons.Outlined.Share, null, tint = AmAccent)
             }
+            IconButton(onClick = {
+                scope.launch {
+                    val res = withContext(Dispatchers.IO) { uploadLog(log) }
+                    snackbar(ctx, res)
+                }
+            }) {
+                Icon(Icons.Outlined.Send, null, tint = AmAccent)
+            }
         }
         Text(
-            text = "Если VPN не запускается — пришлите этот лог.",
+            text = "Отправить ▶ шлёт лог разработчику (лучше при ВЫКЛЮЧЕННОМ VPN).",
             color = AmTextLo,
             fontSize = 11.sp,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -186,4 +197,28 @@ private fun shareLog(ctx: Context, text: String) {
     val chooser = Intent.createChooser(intent, "Поделиться логом")
         .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
     ctx.startActivity(chooser)
+}
+
+// Отправка лога разработчику: POST на диагностический приёмник на AM.SALES-сервере
+// (он открыт с дома напрямую, в отличие от заблокированного CZ). id = модель+время,
+// чтобы разработчик нашёл нужный лог. Возвращает текст для всплывашки.
+private fun uploadLog(text: String): String = try {
+    val id = (android.os.Build.MODEL + "-" + (System.currentTimeMillis() / 1000 % 100000))
+        .replace(Regex("[^A-Za-z0-9_-]"), "")
+    val url = java.net.URL("https://2-26-160-187.nip.io:8443/diaglog.php?id=$id")
+    val c = url.openConnection() as javax.net.ssl.HttpsURLConnection
+    c.connectTimeout = 10000; c.readTimeout = 15000
+    c.requestMethod = "POST"; c.doOutput = true
+    c.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+    c.outputStream.use { it.write(text.toByteArray()) }
+    if (c.responseCode == 200) "Лог отправлен разработчику (id: $id)"
+    else "Не удалось отправить: HTTP ${c.responseCode}"
+} catch (e: Exception) {
+    "Не удалось отправить: ${e.message}"
+}
+
+private fun snackbar(ctx: Context, msg: String) {
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show()
+    }
 }
