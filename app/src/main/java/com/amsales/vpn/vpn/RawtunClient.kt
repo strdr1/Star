@@ -47,6 +47,14 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         private const val MODE_COMPENSATED = 1 // server pre-computes it for our private address
     }
 
+    // Persist key events to a file too: logcat's ring buffer gets flooded by the config dump,
+    // so the diagnostics report (which includes this file) is the reliable record.
+    private val logFile = java.io.File((vpn as android.content.Context).filesDir, "rawtun.log")
+    private fun flog(msg: String) {
+        Log.i(TAG, msg)
+        try { logFile.appendText("${System.currentTimeMillis() % 1000000} $msg\n") } catch (_: Exception) {}
+    }
+
     private var sock: FileDescriptor? = null
     private var local: DatagramSocket? = null
     @Volatile private var running = false
@@ -61,8 +69,8 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
         val s = try {
             Os.socket(OsConstants.AF_INET, OsConstants.SOCK_DGRAM, IPPROTO_UDPLITE)
         } catch (e: ErrnoException) {
-            Log.w(TAG, "socket(UDPLITE): ${e.message}")
-            return "Телефон не даёт открыть сокет UDP-Lite (${e.message}). Прямой обход на этом устройстве недоступен."
+            flog("socket(UDPLITE) FAILED: ${e.message}")
+            return failMsg("Телефон не даёт открыть сокет UDP-Lite (${e.message}).")
         }
         sock = s
         try {
@@ -71,7 +79,7 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
             try {
                 Os.setsockoptInt(s, IPPROTO_UDPLITE, UDPLITE_RECV_CSCOV, 8)
             } catch (e: Exception) {
-                Log.w(TAG, "RECV_CSCOV: ${e.message}")
+                flog("RECV_CSCOV fail: ${e.message}")
             }
             // protect() so the UDP-Lite socket bypasses our own TUN. Use the raw int fd
             // (getInt$ via reflection on the FileDescriptor) and, as a fallback, a dup.
@@ -83,14 +91,14 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
                 rawFd >= 0 -> vpn.protect(rawFd)
                 else -> ParcelFileDescriptor.dup(s).use { vpn.protect(it.fd) }
             }
-            Log.i(TAG, "UDP-Lite socket fd=$rawFd protect=$protectedOk")
+            flog("socket ok fd=$rawFd protect=$protectedOk")
 
             // Bind the local port FIRST, so sing-box can connect even while we probe the server.
             val l = DatagramSocket(null)
             l.reuseAddress = true
             l.bind(InetSocketAddress(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), LOCAL_PORT))
             local = l
-            Log.i(TAG, "listening on 127.0.0.1:$LOCAL_PORT")
+            flog("listening on 127.0.0.1:$LOCAL_PORT")
 
             val localIp = localAddressTowards(server)
                 ?: return fail("Не удалось определить адрес телефона в сети.")
@@ -114,7 +122,7 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
             val mode = if (gotStandard) MODE_STANDARD else MODE_COMPENSATED
             val modeMsg = "RTUNM".toByteArray() + byteArrayOf(mode.toByte()) + ipBytes
             Os.sendto(s, modeMsg, 0, modeMsg.size, 0, server, CONTROL_PORT)
-            Log.i(TAG, "server $serverIp reachable over UDP-Lite, checksum mode $mode, local $localIp")
+            flog("reachable over UDP-Lite, mode=$mode local=$localIp")
 
             thread(name = "rawtun-up", isDaemon = true) { uplink(s, l, server) }
             // The server keeps the mode per (address, port); repeat it so a NAT rebinding
@@ -127,7 +135,7 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
             }
             return null
         } catch (e: Exception) {
-            Log.w(TAG, "start failed", e)
+            flog("start FAILED: ${e.javaClass.simpleName}: ${e.message}")
             return fail("Не удалось запустить прямой обход: ${e.message}")
         }
     }
@@ -141,7 +149,13 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
     }
 
     private fun fail(msg: String): String {
+        flog("FAIL: $msg")
         stop()
+        return msg
+    }
+
+    private fun failMsg(msg: String): String {
+        flog("FAIL: $msg")
         return msg
     }
 

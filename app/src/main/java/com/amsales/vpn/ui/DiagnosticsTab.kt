@@ -61,6 +61,9 @@ fun DiagnosticsTab() {
                     appendLine("=== STDERR.LOG (паники Go) ===")
                     appendLine(readFile(File(ctx.filesDir, "stderr.log")))
                     appendLine()
+                    appendLine("=== RAWTUN.LOG (обёртка UDP-Lite) ===")
+                    appendLine(readFile(File(ctx.filesDir, "rawtun.log")))
+                    appendLine()
                     appendLine("=== SINGBOX.LOG (внутренний лог sing-box) ===")
                     appendLine(readFile(File(ctx.filesDir, "singbox.log")))
                     appendLine()
@@ -155,7 +158,8 @@ private fun readLogcat(): String {
     return try {
         // -d = одноразовый дамп, -t 500 = последние 500 строк
         val process = ProcessBuilder(
-            "logcat", "-d", "-t", "500",
+            "logcat", "-d", "-t", "1500",
+            "Rawtun:V",
             "AmSalesVpnService:V",
             "AmSalesPlatform:V",
             "AmSalesCrash:V",
