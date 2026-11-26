@@ -487,10 +487,6 @@ class AmSalesPlatformInterface(
         } catch (_: Exception) {}
     }
 
-    companion object {
-        private const val TAG = "AmSalesPlatform"
-    }
-
     // ── Added in the lx (1.14) PlatformInterface; we have no use for them. ──
     override fun autoDetectInterfaceControl(fd: Int) {}
     override fun usePlatformAutoDetectInterfaceControl(): Boolean = true
@@ -508,4 +504,8 @@ class AmSalesPlatformInterface(
     override fun registerMyInterface(interfaceName: String?) {}
     override fun tailscaleHostname(): String = ""
     override fun cancelNotification(identifier: String?, id: Int) {}
+
+    companion object {
+        private const val TAG = "AmSalesPlatform"
+    }
 }
