@@ -217,6 +217,11 @@ object SingBoxConfig {
                     if (k.path.isNotEmpty()) put("path", k.path)
                     if (k.hostHeader.isNotEmpty()) put("host", k.hostHeader)
                 }
+                "xhttp" -> JSONObject().put("type", "xhttp").apply {
+                    if (k.path.isNotEmpty()) put("path", k.path)
+                    if (k.hostHeader.isNotEmpty()) put("host", k.hostHeader)
+                    if (k.xhttpMode.isNotEmpty()) put("mode", k.xhttpMode)
+                }
                 "http" -> JSONObject().put("type", "http").apply {
                     if (k.path.isNotEmpty()) put("path", k.path)
                     if (k.hostHeader.isNotEmpty()) put("host", JSONArray().put(k.hostHeader))
