@@ -176,12 +176,13 @@ class RawtunClient(private val vpn: VpnService, private val serverIp: String) {
                 if (Os.poll(fds, 500) <= 0) continue
                 val n = Os.recvfrom(s, buf, 0, buf.size, 0, from)
                 if (n <= 0) continue
-                if (from.port == CONTROL_PORT) {
-                    if (n >= 5 && buf[0] == 'R'.code.toByte() && buf[3] == 'N'.code.toByte()) {
-                        when (buf[4].toInt().toChar()) {
-                            'A' -> { gotStandard = true; helloLatch.countDown() }
-                            'B' -> { gotCompensated = true; helloLatch.countDown() }
-                        }
+                // Tell control from data by the payload marker, not by the socket port: a
+                // UDP-Lite datagram socket does not report a meaningful source port here.
+                if (n >= 5 && buf[0] == 'R'.code.toByte() && buf[1] == 'T'.code.toByte() &&
+                    buf[2] == 'U'.code.toByte() && buf[3] == 'N'.code.toByte()) {
+                    when (buf[4].toInt().toChar()) {
+                        'A' -> { gotStandard = true; helloLatch.countDown() }
+                        'B' -> { gotCompensated = true; helloLatch.countDown() }
                     }
                     continue
                 }
