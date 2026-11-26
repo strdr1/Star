@@ -136,10 +136,6 @@ class AmSalesPlatformInterface(
         Log.i(TAG, "TUN установлен fd=${pfd.fd}")
         return pfd.fd
     }
- catch (e: Exception) {
-            Log.w(TAG, "protect($fd): ${e.message}")
-        }
-    }
 
     override fun usePlatformAutoDetectInterfaceControl(): Boolean = true
 
@@ -487,9 +483,13 @@ class AmSalesPlatformInterface(
         } catch (_: Exception) {}
     }
 
-    // ── Added in the lx (1.14) PlatformInterface; we have no use for them. ──
-    override fun autoDetectInterfaceControl(fd: Int) {}
-    override fun usePlatformAutoDetectInterfaceControl(): Boolean = true
+    // ── Added in the lx (1.14) PlatformInterface. ──
+    override fun autoDetectInterfaceControl(fd: Int) {
+        // protect(fd) from the VpnService, exactly like SagerNet.
+        try { service.protect(fd) } catch (e: Exception) {
+            Log.w(TAG, "protect($fd): ${e.message}")
+        }
+    }
     override fun usePlatformShell(): Boolean = false
     override fun checkPlatformShell() {}
     override fun openShellSession(
