@@ -56,6 +56,8 @@ jobs:
           mkdir -p app/libs
           curl -fsSL -o app/libs/libbox-lx.aar             "https://github.com/Leadaxe/sing-box-lx/releases/download/v${LX_VERSION}/libbox-${LX_VERSION}.aar"
           echo "${LX_SHA256}  app/libs/libbox-lx.aar" | sha256sum -c -
+          curl -fsSL -o app/libs/libv2ray.aar "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar"
+          echo "cdfef146218233a31a8b52c8b1016557730d3b63fc121d4c84cacea50e669155  app/libs/libv2ray.aar" | sha256sum -c -
 
       - name: Build APK
         env:

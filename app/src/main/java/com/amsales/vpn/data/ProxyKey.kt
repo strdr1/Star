@@ -45,6 +45,11 @@ data class ProxyKey(
     val hostHeader: String = "",
     val serviceName: String = "",
     val xhttpMode: String = "",  // xhttp: mode (auto/packet-up/stream-up/stream-one)
+    val xhttpExtra: String = "", // xhttp: raw JSON of Xray's `extra` (xmux/padding/...)
+    val spx: String = "",        // reality spiderX
+    // needsXray: a transport only Xray handles (xhttp with Xray extras). Such keys run through
+    // the bundled Xray core as a local SOCKS proxy; sing-box dials that instead of the server.
+    val needsXray: Boolean = false,
     val obfs: String = "",
     val obfsPassword: String = "",
     val congestion: String = "",
@@ -109,17 +114,22 @@ data class ProxyKey(
             val key = when (p.scheme) {
                 "vless", "vmess" -> {
                     val s = stream(q, defaultSecurity = "none")
+                    // xhttp (vless only) is handled by the bundled Xray core, not sing-box:
+                    // clear the "unsupported" mark and route it through Xray.
+                    val viaXray = p.scheme == "vless" && s.type == "xhttp"
                     ProxyKey(
                         raw = t, proto = p.scheme, tag = name, host = p.host, port = port,
                         uuid = p.user,
                         vmessSecurity = if (p.scheme == "vmess") q["encryption"].orEmpty() else "",
                         flow = q["flow"].orEmpty(),
                         type = s.type, security = s.security, sni = s.sni, fp = s.fp,
-                        pbk = q["pbk"].orEmpty(), sid = q["sid"].orEmpty(),
+                        pbk = q["pbk"].orEmpty(), sid = q["sid"].orEmpty(), spx = q["spx"].orEmpty(),
                         alpn = s.alpn, insecure = s.insecure, path = s.path,
                         hostHeader = q["host"].orEmpty(), serviceName = q["serviceName"].orEmpty(),
                         xhttpMode = q["mode"].orEmpty(),
-                        unsupported = s.unsupported,
+                        xhttpExtra = q["extra"].orEmpty(),  // splitUri already url-decoded it
+                        needsXray = viaXray,
+                        unsupported = if (viaXray) "" else s.unsupported,
                     ).takeIf { it.uuid.isNotEmpty() }
                 }
                 "trojan" -> {

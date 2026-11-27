@@ -12,8 +12,8 @@ android {
         applicationId = "com.strdr1.star"
         minSdk = 24       // Android 7.0 — VpnService.addDisallowedApplication работает с API 21+
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.3.3"
+        versionCode = 9
+        versionName = "1.4.0"
 
         // Собираем APK только для ARM (arm64 + armv7). На x86-эмуляторе
         // запускать смысла нет — у юзера телефоны.
@@ -114,4 +114,6 @@ dependencies {
     // + PlatformInterface (15 методов) — это и есть наш реальный движок.
     // sing-box-lx: sing-box + xhttp transport (AAR fetched in CI into app/libs).
     implementation(files("libs/libbox-lx.aar"))
+    // Xray core (libv2ray) for xhttp keys sing-box cannot do. AAR fetched in CI.
+    implementation(files("libs/libv2ray.aar"))
 }
