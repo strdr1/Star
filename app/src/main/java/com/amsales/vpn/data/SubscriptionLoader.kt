@@ -139,6 +139,15 @@ object SubscriptionLoader {
                 } catch (_: Exception) {}
             }
 
+            // Happ-style panels (boltproxy etc.) put the real xhttp settings (uplink placement,
+            // post sizes, padding) only into the Xray JSON they serve to Happ; their plain links
+            // carry a broken `extra` (server answers 413/502). If the panel serves that JSON,
+            // replace the plain xhttp links with links rebuilt from it.
+            happXhttpLinks(url)?.takeIf { it.isNotEmpty() }?.let { fixed ->
+                found.removeAll { ProxyKey.parse(it)?.type == "xhttp" }
+                fixed.forEach { if (it !in found) found += it }
+            }
+
             // Детект заглушки (все @0.0.0.0)
             val real = found.filter {
                 !it.contains("@0.0.0.0:") && !it.contains("@127.0.0.1:")
@@ -158,4 +167,64 @@ object SubscriptionLoader {
             Result.failure(e)
         }
     }
+
+    private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+
+    /**
+     * Fetches the subscription as Happ does and turns every vless/xhttp outbound of the
+     * returned Xray configs into a vless:// link (with the full `extra` JSON). Returns null if
+     * the panel does not serve Xray JSON to Happ.
+     */
+    private fun happXhttpLinks(url: String): List<String>? = try {
+        val conn = URL(url).openConnection()
+        conn.setRequestProperty("User-Agent", "Happ/3.5.0")
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 15_000
+        val text = String(conn.getInputStream().readBytes(), Charsets.UTF_8).trim()
+        if (!text.startsWith("[")) null else {
+            val configs = JSONArray(text)
+            val out = mutableListOf<String>()
+            val seen = HashSet<String>()
+            // Pass 0: single-server configs (outbound tagged "proxy") keep their own name;
+            // pass 1: the rest (balancer configs) add only servers not seen yet.
+            for (pass in 0..1) for (i in 0 until configs.length()) {
+                val c = configs.optJSONObject(i) ?: continue
+                val remarks = c.optString("remarks")
+                val obs = c.optJSONArray("outbounds") ?: continue
+                for (j in 0 until obs.length()) {
+                    val o = obs.optJSONObject(j) ?: continue
+                    val isProxy = o.optString("tag") == "proxy"
+                    if ((pass == 0) != isProxy || o.optString("protocol") != "vless") continue
+                    val ss = o.optJSONObject("streamSettings") ?: continue
+                    val net = ss.optString("network")
+                    if (net != "xhttp" && net != "splithttp") continue
+                    val node = o.optJSONObject("settings")?.optJSONArray("vnext")?.optJSONObject(0) ?: continue
+                    val user = node.optJSONArray("users")?.optJSONObject(0) ?: continue
+                    val x = ss.optJSONObject("xhttpSettings") ?: ss.optJSONObject("xHTTPSettings") ?: JSONObject()
+                    val sec = ss.optString("security", "none")
+                    val t = ss.optJSONObject(if (sec == "reality") "realitySettings" else "tlsSettings") ?: JSONObject()
+                    val host = node.optString("address"); val port = node.optInt("port", 443)
+                    val id = user.optString("id")
+                    if (host.isEmpty() || id.isEmpty()) continue
+                    val dedup = "$host|$port|${x.optString("path")}|${x.optString("host")}|$id"
+                    if (!seen.add(dedup)) continue
+                    val q = linkedMapOf(
+                        "type" to "xhttp", "encryption" to "none", "security" to sec,
+                        "path" to x.optString("path", "/"), "host" to x.optString("host"),
+                        "mode" to x.optString("mode", "auto"),
+                        "sni" to t.optString("serverName"), "fp" to t.optString("fingerprint"),
+                    )
+                    t.optJSONArray("alpn")?.let { a -> q["alpn"] = (0 until a.length()).joinToString(",") { a.optString(it) } }
+                    if (sec == "reality") { q["pbk"] = t.optString("publicKey"); q["sid"] = t.optString("shortId") }
+                    user.optString("flow").takeIf { it.isNotEmpty() }?.let { q["flow"] = it }
+                    x.optJSONObject("extra")?.let { q["extra"] = it.toString() }
+                    val name = if (isProxy) remarks else "$remarks · ${o.optString("tag")}"
+                    out += "vless://$id@$host:$port?" +
+                        q.filterValues { it.isNotEmpty() }.entries.joinToString("&") { "${it.key}=${enc(it.value)}" } +
+                        "#" + enc(name)
+                }
+            }
+            out
+        }
+    } catch (_: Exception) { null }
 }
