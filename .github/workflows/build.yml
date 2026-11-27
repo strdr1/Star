@@ -53,7 +53,7 @@ jobs:
       - name: Fetch combined core (sing-box-lx + Xray)
         env:
           CORE_TAG: core-lx35-xray26119
-          CORE_SHA256: __CORE_SHA__
+          CORE_SHA256: 8934f42e0f5b23e950bdec81817d023bb9c8b6cae2c77da1bb27cfccaa3eccdf
         run: |
           mkdir -p app/libs
           curl -fsSL -o app/libs/core.aar             "https://github.com/strdr1/Star/releases/download/${CORE_TAG}/core-${CORE_TAG}.aar"
