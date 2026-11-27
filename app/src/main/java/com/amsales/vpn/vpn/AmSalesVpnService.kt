@@ -175,9 +175,14 @@ class AmSalesVpnService : VpnService() {
             // rawtun key: bring the UDP-Lite wrapper up before sing-box starts dialing it.
             // All rawtun keys in "Auto" share one wrapper, so they must point at one server.
             rawtun?.stop(); rawtun = null
-            servers.firstOrNull { it.rawtun }?.let { k ->
+            crashLog.appendText("[rawtun] servers=${servers.map { "${it.tag}:${it.proto}:rawtun=${it.rawtun}" }}\n")
+            val rtKey = servers.firstOrNull { it.rawtun }
+            crashLog.appendText("[rawtun] selected=${rtKey?.host ?: "NONE"}\n")
+            rtKey?.let { k ->
                 val rc = RawtunClient(this@AmSalesVpnService, k.host)
-                rc.start()?.let { err -> throw IllegalStateException(err) }
+                val err = rc.start()
+                crashLog.appendText("[rawtun] start() -> ${err ?: "OK"}\n")
+                if (err != null) throw IllegalStateException(err)
                 rawtun = rc
             }
             val serversLabel = when {
