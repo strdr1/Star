@@ -46,7 +46,7 @@ jobs:
         run: |
           go version
           git tag "$LX_TAG" -f   # build_libbox stamps Libbox.version() from git describe
-          go get "$XRAY_LIB@$XRAY_VER"
+          go get "$XRAY_LIB@$XRAY_COMMIT"
           grep -nE "AndroidLibXrayLite|xtls/xray-core" go.mod
 
       - name: Patch build_libbox (bind Xray too, skip legacy variant)
