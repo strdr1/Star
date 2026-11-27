@@ -15,6 +15,9 @@ env:
   LX_TAG: v1.14.4-lx.35
   XRAY_LIB: github.com/2dust/AndroidLibXrayLite
   XRAY_VER: v26.11.9
+  # Tags are v26.x but the module path has no /v26 suffix, so Go rejects the tag; pin the
+  # tag's commit instead (Go turns it into a pseudo-version).
+  XRAY_COMMIT: b5a377087e74eaa34e86718710b04c50f4b767f5
   CORE_TAG: core-lx35-xray26119
 
 jobs:
