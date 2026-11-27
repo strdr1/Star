@@ -113,7 +113,7 @@ dependencies {
     // Содержит Libbox.newCommandServer / CommandServer.startOrReloadService
     // + PlatformInterface (15 методов) — это и есть наш реальный движок.
     // sing-box-lx: sing-box + xhttp transport (AAR fetched in CI into app/libs).
-    implementation(files("libs/libbox-lx.aar"))
-    // Xray core (libv2ray) for xhttp keys sing-box cannot do. AAR fetched in CI.
-    implementation(files("libs/libv2ray.aar"))
+    // Combined gomobile core: sing-box-lx (io.nekohasekai.libbox) + Xray (io.nekohasekai.libv2ray)
+    // in one AAR, built by .github/workflows/core.yml and fetched in CI.
+    implementation(files("libs/core.aar"))
 }

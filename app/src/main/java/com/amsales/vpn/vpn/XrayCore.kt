@@ -4,9 +4,9 @@ import android.content.Context
 import android.net.VpnService
 import android.util.Log
 import com.amsales.vpn.data.ProxyKey
-import libv2ray.CoreCallbackHandler
-import libv2ray.CoreController
-import libv2ray.Libv2ray
+import io.nekohasekai.libv2ray.CoreCallbackHandler
+import io.nekohasekai.libv2ray.CoreController
+import io.nekohasekai.libv2ray.Libv2ray
 import org.json.JSONArray
 import org.json.JSONObject
 
