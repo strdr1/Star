@@ -165,6 +165,11 @@ object SingBoxConfig {
      */
     /** Outbound sing-box для одного сервера. */
     fun outbound(k: ProxyKey, tag: String): JSONObject {
+        // xhttp via the Xray core: sing-box just dials Xray's local SOCKS proxy.
+        if (k.needsXray) {
+            return JSONObject().put("type", "socks").put("tag", tag)
+                .put("server", "127.0.0.1").put("server_port", XrayCore.LOCAL_PORT).put("version", "5")
+        }
         val ob = JSONObject()
             .put("type", k.proto)
             .put("tag", tag)
@@ -367,6 +372,14 @@ object SingBoxConfig {
                     .put("type", "udp")
                     .put("server", "8.8.8.8")))
             val dnsRules = JSONArray()
+            // Xray (xhttp) server names: resolve via local DNS. The default "remote" DNS goes
+            // through "proxy" = Xray itself, which cannot connect before it resolves its own
+            // server — a deadlock.
+            keys.filter { it.needsXray && !it.host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")) }
+                .map { it.host }.distinct().takeIf { it.isNotEmpty() }?.let { names ->
+                    val dom = JSONArray(); names.forEach { dom.put(it) }
+                    dnsRules.put(JSONObject().put("domain", dom).put("server", "local"))
+                }
             if (settings.routeRuDirect) {
                 dnsRules.put(JSONObject()
                     .put("domain_suffix", ".ru")
@@ -419,6 +432,14 @@ object SingBoxConfig {
             .put("ip_cidr", JSONArray().put("127.0.0.0/8"))
             .put("action", "route")
             .put("outbound", "direct"))
+        // Xray (xhttp) server hosts: Xray's own sockets are not protected, so send them
+        // direct, or Xray's connection to the server would loop back into the TUN.
+        keys.filter { it.needsXray }.map { it.host }.distinct().takeIf { it.isNotEmpty() }?.let { hosts ->
+            val ips = JSONArray(); val domains = JSONArray()
+            hosts.forEach { h -> if (h.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) ips.put("$h/32") else domains.put(h) }
+            if (ips.length() > 0) rules.put(JSONObject().put("ip_cidr", ips).put("action", "route").put("outbound", "direct"))
+            if (domains.length() > 0) rules.put(JSONObject().put("domain", domains).put("action", "route").put("outbound", "direct"))
+        }
         // (package_name=com.amsales.vpn rule убран — мы добавили
         // addDisallowedApplication в openTun, наш UID не идёт в TUN)
         // Блокировка рекламы YouTube/Google — action: reject (sing-box 1.13+)

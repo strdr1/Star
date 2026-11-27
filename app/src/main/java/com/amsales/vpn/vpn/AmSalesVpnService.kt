@@ -78,6 +78,7 @@ class AmSalesVpnService : VpnService() {
     private var platformInterface: AmSalesPlatformInterface? = null
     private var dpiServer: com.amsales.vpn.dpi.DpiSocksServer? = null
     private var rawtun: RawtunClient? = null
+    private var xray: XrayCore? = null
     private var statsJob: Job? = null
     private var checkJob: Job? = null
     private var activeServers: List<ProxyKey> = emptyList()
@@ -184,6 +185,16 @@ class AmSalesVpnService : VpnService() {
                 crashLog.appendText("[rawtun] start() -> ${err ?: "OK"}\n")
                 if (err != null) throw IllegalStateException(err)
                 rawtun = rc
+            }
+            // xhttp key: run it through the bundled Xray core as a local SOCKS proxy; sing-box
+            // then dials that instead of the server. Xray up before sing-box, like rawtun.
+            xray?.stop(); xray = null
+            servers.firstOrNull { it.needsXray }?.let { k ->
+                val xc = XrayCore(this@AmSalesVpnService)
+                val err = xc.start(k)
+                crashLog.appendText("[xray] start(${k.host}) -> ${err ?: "OK"}\n")
+                if (err != null) throw IllegalStateException(err)
+                xray = xc
             }
             val serversLabel = when {
                 servers.size > 1 -> "Авто"

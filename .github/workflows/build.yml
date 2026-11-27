@@ -48,14 +48,16 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Fetch libbox (sing-box-lx, adds xhttp)
+      # Combined gomobile core: sing-box-lx (libbox) + Xray (libv2ray) in ONE AAR with one Go
+      # runtime (two separate gomobile AARs collide on go.Seq). Built by core.yml.
+      - name: Fetch combined core (sing-box-lx + Xray)
         env:
-          LX_VERSION: 1.14.4-lx.35
-          LX_SHA256: e5cfd79364316150acd5c9ddbb5d6d8c749f1ce4a590f9a3eaa408f949b8fd7b
+          CORE_TAG: core-lx35-xray26119
+          CORE_SHA256: 8934f42e0f5b23e950bdec81817d023bb9c8b6cae2c77da1bb27cfccaa3eccdf
         run: |
           mkdir -p app/libs
-          curl -fsSL -o app/libs/libbox-lx.aar             "https://github.com/Leadaxe/sing-box-lx/releases/download/v${LX_VERSION}/libbox-${LX_VERSION}.aar"
-          echo "${LX_SHA256}  app/libs/libbox-lx.aar" | sha256sum -c -
+          curl -fsSL -o app/libs/core.aar             "https://github.com/strdr1/Star/releases/download/${CORE_TAG}/core-${CORE_TAG}.aar"
+          echo "${CORE_SHA256}  app/libs/core.aar" | sha256sum -c -
 
       - name: Build APK
         env:
