@@ -1,0 +1,104 @@
+name: Build combined core (sing-box-lx + Xray)
+
+# One gomobile AAR with BOTH engines: sing-box-lx (libbox: TUN, rawtun path, routing) and
+# Xray (libv2ray: xhttp with Xray extras). Two separate gomobile AARs cannot live in one APK
+# (each ships its own Go runtime -> duplicate go.Seq), so they are bound together here.
+on:
+  push:
+    branches: [core]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LX_TAG: v1.14.4-lx.35
+  XRAY_LIB: github.com/2dust/AndroidLibXrayLite
+  XRAY_VER: v26.11.9
+  CORE_TAG: core-lx35-xray26119
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: Leadaxe/sing-box-lx
+          ref: ${{ env.LX_TAG }}
+          submodules: recursive
+          fetch-depth: 0
+
+      # lx pins Go 1.26 in go.version; the Xray lib needs Go >= 1.27.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.x"
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
+
+      - name: Setup OpenJDK 17
+        run: sudo apt-get update && sudo apt-get install -y openjdk-17-jdk-headless
+
+      - name: Add Xray library to the lx module
+        run: |
+          go version
+          git tag "$LX_TAG" -f   # build_libbox stamps Libbox.version() from git describe
+          go get "$XRAY_LIB@$XRAY_VER"
+          grep -nE "AndroidLibXrayLite|xtls/xray-core" go.mod
+
+      - name: Patch build_libbox (bind Xray too, skip legacy variant)
+        run: |
+          python3 - <<'PY'
+          p = "cmd/internal/build_libbox/main.go"
+          s = open(p).read()
+          old = 'args = append(args, "./experimental/libbox")'
+          assert old in s, "bind args anchor not found"
+          s = s.replace(old, 'args = append(args, "./experimental/libbox", "github.com/2dust/AndroidLibXrayLite")', 1)
+          i = s.index("// Build legacy variant")
+          j = s.index("}, bindTarget)", i) + len("}, bindTarget)")
+          s = s[:i] + "// legacy variant skipped (combined core build)" + s[j:]
+          open(p, "w").write(s)
+          print("patched")
+          PY
+          grep -n "AndroidLibXrayLite\|legacy variant" cmd/internal/build_libbox/main.go
+
+      - name: Build combined AAR
+        run: |
+          make lib_install
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          make lib_android
+          ls -la *.aar
+        env:
+          GOFLAGS: -mod=mod
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Inspect AAR (both engines inside?)
+        run: |
+          mkdir -p dist
+          cp libbox.aar "dist/core-${CORE_TAG}.aar"
+          cd dist
+          unzip -o -q "core-${CORE_TAG}.aar" classes.jar
+          unzip -l classes.jar | grep -E "libbox/Libbox.class|libv2ray/Libv2ray.class|go/Seq.class"
+          unzip -l "core-${CORE_TAG}.aar" | grep "\.so"
+          rm classes.jar
+          sha256sum "core-${CORE_TAG}.aar" | tee "core-${CORE_TAG}.aar.sha256"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: combined-core
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish as prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: strdr1/Star
+          tag_name: ${{ env.CORE_TAG }}
+          target_commitish: core
+          name: "Combined core: sing-box-lx ${{ env.LX_TAG }} + Xray ${{ env.XRAY_VER }}"
+          prerelease: true
+          files: dist/*
