@@ -93,7 +93,7 @@ class XrayCore(private val vpn: VpnService) {
             // server would loop back into our TUN. sing-box instead routes that server's host
             // direct (see SingBoxConfig). No ProcessFinder needed (it is only for stats).
             val json = configFor(k)
-            c.startLoop(json, LOCAL_PORT)
+            c.startLoop(json, 0)  // 2nd arg is a TUN fd for a tun inbound; we use SOCKS, so none
             controller = c
             Log.i(TAG, "started on socks 127.0.0.1:$LOCAL_PORT for ${k.host}")
             return null

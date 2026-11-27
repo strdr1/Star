@@ -372,6 +372,14 @@ object SingBoxConfig {
                     .put("type", "udp")
                     .put("server", "8.8.8.8")))
             val dnsRules = JSONArray()
+            // Xray (xhttp) server names: resolve via local DNS. The default "remote" DNS goes
+            // through "proxy" = Xray itself, which cannot connect before it resolves its own
+            // server — a deadlock.
+            keys.filter { it.needsXray && !it.host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")) }
+                .map { it.host }.distinct().takeIf { it.isNotEmpty() }?.let { names ->
+                    val dom = JSONArray(); names.forEach { dom.put(it) }
+                    dnsRules.put(JSONObject().put("domain", dom).put("server", "local"))
+                }
             if (settings.routeRuDirect) {
                 dnsRules.put(JSONObject()
                     .put("domain_suffix", ".ru")
