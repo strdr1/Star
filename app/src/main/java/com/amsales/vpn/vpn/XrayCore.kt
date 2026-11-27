@@ -65,7 +65,7 @@ class XrayCore(private val vpn: VpnService) {
             .put("streamSettings", stream)
 
         return JSONObject()
-            .put("log", JSONObject().put("loglevel", "warning"))
+            .put("log", JSONObject().put("loglevel", "info"))
             .put("inbounds", JSONArray().put(JSONObject()
                 .put("listen", "127.0.0.1").put("port", LOCAL_PORT).put("protocol", "socks")
                 .put("settings", JSONObject().put("udp", true))))

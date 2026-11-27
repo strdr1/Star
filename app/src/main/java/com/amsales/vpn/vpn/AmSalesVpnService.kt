@@ -160,7 +160,7 @@ class AmSalesVpnService : VpnService() {
             }
 
             // DPI-only режим не требует ключей.
-            val servers = if (isDpiOnly) emptyList() else repo.serversForConnect()
+            val servers = pinXrayHosts(if (isDpiOnly) emptyList() else repo.serversForConnect())
             if (!isDpiOnly && servers.isEmpty()) {
                 val cur = repo.current()?.key
                 VpnState.broadcast(applicationContext, "error", error = when {
@@ -363,6 +363,23 @@ class AmSalesVpnService : VpnService() {
         } finally {
             starting.set(false)
         }
+    }
+
+    /**
+     * Xray's own sockets are not protected, so its connection to the server enters our TUN and
+     * must be routed direct by sing-box. Xray resolves the name itself and dials the bare IP;
+     * reality/TLS SNI is often a decoy, so a domain rule never matches and the connection loops
+     * back into Xray. Pin the server to its IPv4 up front (keeping the name as SNI / Host) so the
+     * direct rule is an exact ip_cidr.
+     */
+    private fun pinXrayHosts(list: List<ProxyKey>): List<ProxyKey> = list.map { k ->
+        if (!k.needsXray || k.host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) return@map k
+        val ip = try {
+            java.net.InetAddress.getAllByName(k.host).firstOrNull { it is java.net.Inet4Address }?.hostAddress
+        } catch (e: Exception) { null }
+        try { File(applicationContext.filesDir, "crash.log").appendText("[xray] pin ${k.host} -> ${ip ?: "RESOLVE FAILED"}\n") } catch (_: Exception) {}
+        if (ip == null) k
+        else k.copy(host = ip, sni = k.sni.ifEmpty { k.host }, hostHeader = k.hostHeader.ifEmpty { k.host })
     }
 
     private fun startStatsWatcher() {

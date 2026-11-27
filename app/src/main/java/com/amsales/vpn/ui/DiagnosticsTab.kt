@@ -160,6 +160,7 @@ private fun readLogcat(): String {
         val process = ProcessBuilder(
             "logcat", "-d", "-t", "1500",
             "Rawtun:V",
+            "XrayCore:V",
             "AmSalesVpnService:V",
             "AmSalesPlatform:V",
             "AmSalesCrash:V",
