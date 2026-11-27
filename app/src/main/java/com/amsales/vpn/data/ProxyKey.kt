@@ -50,6 +50,7 @@ data class ProxyKey(
     // needsXray: a transport only Xray handles (xhttp with Xray extras). Such keys run through
     // the bundled Xray core as a local SOCKS proxy; sing-box dials that instead of the server.
     val needsXray: Boolean = false,
+    val xrayPort: Int = 0,       // runtime only: Xray's local SOCKS port for this key
     val obfs: String = "",
     val obfsPassword: String = "",
     val congestion: String = "",

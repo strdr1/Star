@@ -168,7 +168,8 @@ object SingBoxConfig {
         // xhttp via the Xray core: sing-box just dials Xray's local SOCKS proxy.
         if (k.needsXray) {
             return JSONObject().put("type", "socks").put("tag", tag)
-                .put("server", "127.0.0.1").put("server_port", XrayCore.LOCAL_PORT).put("version", "5")
+                .put("server", "127.0.0.1")
+                .put("server_port", if (k.xrayPort > 0) k.xrayPort else XrayCore.LOCAL_PORT).put("version", "5")
         }
         val ob = JSONObject()
             .put("type", k.proto)

@@ -123,7 +123,8 @@ fun ServersTab() {
                     if (keys.size >= 2 && !autoSelect) {
                         autoSelect = true; repo.autoSelect = true
                     }
-                    info = if (added == 1) "Добавлен 1 ключ" else "Добавлено: $added"
+                    info = (if (added == 1) "Добавлен 1 ключ" else "Добавлено: $added") +
+                        SubscriptionLoader.lastHappXhttp.let { if (it > 0) " (xhttp в формате Happ: $it)" else "" }
                     pingAll()
                     error = null
                     showPasteDialog = false

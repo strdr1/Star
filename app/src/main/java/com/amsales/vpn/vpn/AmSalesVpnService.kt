@@ -189,10 +189,10 @@ class AmSalesVpnService : VpnService() {
             // xhttp key: run it through the bundled Xray core as a local SOCKS proxy; sing-box
             // then dials that instead of the server. Xray up before sing-box, like rawtun.
             xray?.stop(); xray = null
-            servers.firstOrNull { it.needsXray }?.let { k ->
+            servers.filter { it.needsXray }.takeIf { it.isNotEmpty() }?.let { xk ->
                 val xc = XrayCore(this@AmSalesVpnService)
-                val err = xc.start(k)
-                crashLog.appendText("[xray] start(${k.host}) -> ${err ?: "OK"}\n")
+                val err = xc.start(xk)
+                crashLog.appendText("[xray] start(${xk.joinToString { "${it.host}:${it.xrayPort}" }}) -> ${err ?: "OK"}\n")
                 if (err != null) throw IllegalStateException(err)
                 xray = xc
             }
@@ -372,14 +372,20 @@ class AmSalesVpnService : VpnService() {
      * back into Xray. Pin the server to its IPv4 up front (keeping the name as SNI / Host) so the
      * direct rule is an exact ip_cidr.
      */
-    private fun pinXrayHosts(list: List<ProxyKey>): List<ProxyKey> = list.map { k ->
-        if (!k.needsXray || k.host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) return@map k
-        val ip = try {
-            java.net.InetAddress.getAllByName(k.host).firstOrNull { it is java.net.Inet4Address }?.hostAddress
-        } catch (e: Exception) { null }
-        try { File(applicationContext.filesDir, "crash.log").appendText("[xray] pin ${k.host} -> ${ip ?: "RESOLVE FAILED"}\n") } catch (_: Exception) {}
-        if (ip == null) k
-        else k.copy(host = ip, sni = k.sni.ifEmpty { k.host }, hostHeader = k.hostHeader.ifEmpty { k.host })
+    private fun pinXrayHosts(list: List<ProxyKey>): List<ProxyKey> {
+        var n = 0
+        return list.map { k0 ->
+            if (!k0.needsXray) return@map k0
+            // One Xray instance, one local SOCKS port per xhttp key (for "Auto").
+            val k = k0.copy(xrayPort = XrayCore.LOCAL_PORT + n++)
+            if (k.host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) return@map k
+            val ip = try {
+                java.net.InetAddress.getAllByName(k.host).firstOrNull { it is java.net.Inet4Address }?.hostAddress
+            } catch (e: Exception) { null }
+            try { File(applicationContext.filesDir, "crash.log").appendText("[xray] pin ${k.host} -> ${ip ?: "RESOLVE FAILED"}\n") } catch (_: Exception) {}
+            if (ip == null) k
+            else k.copy(host = ip, sni = k.sni.ifEmpty { k.host }, hostHeader = k.hostHeader.ifEmpty { k.host })
+        }
     }
 
     private fun startStatsWatcher() {

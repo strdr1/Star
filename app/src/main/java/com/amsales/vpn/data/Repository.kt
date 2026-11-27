@@ -65,6 +65,16 @@ class Repository(private val context: Context) {
     /** Добавляет сразу пачку — для импорта подписки. Дубли пропускаются. */
     fun addKeys(uris: List<String>): Int {
         val current = store.keys.toMutableList()
+        // Re-import of a subscription: drop stored xhttp keys of the same account that the
+        // fresh import no longer has (old links with a broken `extra` or a stale CDN address).
+        val fresh = uris.mapNotNull { ProxyKey.parse(it) }.filter { it.type == "xhttp" }
+        val freshUuids = fresh.map { it.uuid }.toSet()
+        if (freshUuids.isNotEmpty()) {
+            current.removeAll { s ->
+                s !in uris && ProxyKey.parse(s)?.let { it.type == "xhttp" && it.uuid in freshUuids } == true
+            }
+            if (store.currentKeyIndex >= current.size) store.currentKeyIndex = 0
+        }
         var added = 0
         for (uri in uris) {
             if (ProxyKey.parse(uri) == null) continue

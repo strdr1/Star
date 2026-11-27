@@ -23,9 +23,13 @@ import java.net.URL
  */
 object SubscriptionLoader {
 
+    /** How many xhttp keys the last subscription load rebuilt from Happ-format JSON. */
+    @Volatile var lastHappXhttp = 0
+
     /** Парсит вход — либо ключ, либо подписка/happ. Делает сетевой запрос
      *  если требуется. Возвращает список ключей. */
     fun loadOrParse(input: String): Result<List<String>> {
+        lastHappXhttp = 0
         val trimmed = input.trim()
         if (trimmed.isEmpty()) return Result.failure(IllegalArgumentException("пустой ввод"))
 
@@ -143,7 +147,9 @@ object SubscriptionLoader {
             // post sizes, padding) only into the Xray JSON they serve to Happ; their plain links
             // carry a broken `extra` (server answers 413/502). If the panel serves that JSON,
             // replace the plain xhttp links with links rebuilt from it.
+            lastHappXhttp = 0
             happXhttpLinks(url)?.takeIf { it.isNotEmpty() }?.let { fixed ->
+                lastHappXhttp = fixed.size
                 found.removeAll { ProxyKey.parse(it)?.type == "xhttp" }
                 fixed.forEach { if (it !in found) found += it }
             }

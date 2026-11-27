@@ -31,8 +31,30 @@ class XrayCore(private val vpn: VpnService) {
 
     private var controller: CoreController? = null
 
-    /** Build an Xray client JSON from a parsed key (vless only; the type that needs Xray). */
-    fun configFor(k: ProxyKey): String {
+    /**
+     * One Xray config for all keys: key i gets SOCKS inbound "in-i" on its xrayPort, routed to
+     * outbound "out-i".
+     */
+    fun configFor(keys: List<ProxyKey>): String {
+        val inbounds = JSONArray(); val outbounds = JSONArray(); val rules = JSONArray()
+        keys.forEachIndexed { i, k ->
+            inbounds.put(JSONObject().put("tag", "in-$i")
+                .put("listen", "127.0.0.1").put("port", if (k.xrayPort > 0) k.xrayPort else LOCAL_PORT + i)
+                .put("protocol", "socks").put("settings", JSONObject().put("udp", true)))
+            outbounds.put(outboundFor(k).put("tag", "out-$i"))
+            rules.put(JSONObject().put("type", "field")
+                .put("inboundTag", JSONArray().put("in-$i")).put("outboundTag", "out-$i"))
+        }
+        return JSONObject()
+            .put("log", JSONObject().put("loglevel", "info"))
+            .put("inbounds", inbounds)
+            .put("outbounds", outbounds)
+            .put("routing", JSONObject().put("rules", rules))
+            .toString()
+    }
+
+    /** Xray vless outbound for a parsed key (the type that needs Xray). */
+    private fun outboundFor(k: ProxyKey): JSONObject {
         val stream = JSONObject().put("network", k.type).put("security", k.security)
         when (k.security) {
             "tls" -> stream.put("tlsSettings", JSONObject()
@@ -57,24 +79,16 @@ class XrayCore(private val vpn: VpnService) {
 
         val user = JSONObject().put("id", k.uuid).put("encryption", "none")
         if (k.flow.isNotEmpty()) user.put("flow", k.flow)
-        val outbound = JSONObject()
+        return JSONObject()
             .put("protocol", "vless")
             .put("settings", JSONObject().put("vnext", JSONArray().put(JSONObject()
                 .put("address", k.host).put("port", k.port)
                 .put("users", JSONArray().put(user)))))
             .put("streamSettings", stream)
-
-        return JSONObject()
-            .put("log", JSONObject().put("loglevel", "info"))
-            .put("inbounds", JSONArray().put(JSONObject()
-                .put("listen", "127.0.0.1").put("port", LOCAL_PORT).put("protocol", "socks")
-                .put("settings", JSONObject().put("udp", true))))
-            .put("outbounds", JSONArray().put(outbound))
-            .toString()
     }
 
-    /** Starts Xray with the given key. Returns null on success, else a message. */
-    fun start(k: ProxyKey): String? {
+    /** Starts Xray for the given keys. Returns null on success, else a message. */
+    fun start(keys: List<ProxyKey>): String? {
         try {
             if (!envReady) {
                 // Xray needs a writable dir for its env; no geo files are used for a plain proxy.
@@ -92,10 +106,10 @@ class XrayCore(private val vpn: VpnService) {
             // Note: libv2ray-lite does not protect Xray's own sockets, so its connection to the
             // server would loop back into our TUN. sing-box instead routes that server's host
             // direct (see SingBoxConfig). No ProcessFinder needed (it is only for stats).
-            val json = configFor(k)
+            val json = configFor(keys)
             c.startLoop(json, 0)  // 2nd arg is a TUN fd for a tun inbound; we use SOCKS, so none
             controller = c
-            Log.i(TAG, "started on socks 127.0.0.1:$LOCAL_PORT for ${k.host}")
+            Log.i(TAG, "started: ${keys.joinToString { "${it.host}@${it.xrayPort}" }}")
             return null
         } catch (e: Throwable) {
             Log.w(TAG, "start failed", e)
