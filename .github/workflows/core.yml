@@ -76,6 +76,9 @@ jobs:
           ls -la *.aar
         env:
           GOFLAGS: -mod=mod
+          # Go 1.27 (needed by Xray) rejects cronet-go's "#cgo LDFLAGS: -l:libcronet.a" unless
+          # explicitly allowed; lx's own build uses Go 1.26 where it passed.
+          CGO_LDFLAGS_ALLOW: "-l:libcronet\\.a"
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
