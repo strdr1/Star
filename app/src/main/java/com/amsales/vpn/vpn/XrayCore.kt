@@ -3,11 +3,14 @@ package com.amsales.vpn.vpn
 import android.content.Context
 import android.net.VpnService
 import android.util.Log
+import com.amsales.vpn.data.ProxyKey
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
 import org.json.JSONArray
 import org.json.JSONObject
+
+private fun jsonArrayOf(items: List<String>) = JSONArray().apply { items.forEach { put(it) } }
 
 /**
  * Xray core (libv2ray) as a local SOCKS proxy, for key types sing-box cannot do — chiefly
@@ -35,7 +38,7 @@ class XrayCore(private val vpn: VpnService) {
             "tls" -> stream.put("tlsSettings", JSONObject()
                 .put("serverName", k.sni.ifEmpty { k.host })
                 .put("fingerprint", k.fp.ifEmpty { "chrome" })
-                .apply { if (k.alpn.isNotEmpty()) put("alpn", JSONArray(k.alpn)) })
+                .apply { if (k.alpn.isNotEmpty()) put("alpn", jsonArrayOf(k.alpn)) })
             "reality" -> stream.put("realitySettings", JSONObject()
                 .put("serverName", k.sni.ifEmpty { k.host })
                 .put("fingerprint", k.fp.ifEmpty { "chrome" })
