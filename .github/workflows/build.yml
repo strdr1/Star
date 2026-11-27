@@ -58,6 +58,33 @@ jobs:
           echo "${LX_SHA256}  app/libs/libbox-lx.aar" | sha256sum -c -
           curl -fsSL -o app/libs/libv2ray.aar "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar"
           echo "cdfef146218233a31a8b52c8b1016557730d3b63fc121d4c84cacea50e669155  app/libs/libv2ray.aar" | sha256sum -c -
+          # Both libbox-lx and libv2ray are gomobile AARs and ship the same go.* runtime
+          # classes -> "duplicate classes". Strip the shared go runtime from libv2ray's
+          # classes.jar; libbox-lx's copy serves both (same gomobile bridge).
+          python3 - <<'PY'
+          import zipfile, shutil, os
+          aar = "app/libs/libv2ray.aar"
+          tmp = aar + ".jar"
+          with zipfile.ZipFile(aar) as z:
+              z.extract("classes.jar", "libv2ray_tmp")
+          src = "libv2ray_tmp/classes.jar"
+          out = "libv2ray_tmp/classes_clean.jar"
+          with zipfile.ZipFile(src) as zi, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
+              for it in zi.infolist():
+                  if it.filename.startswith("go/"):
+                      continue
+                  zo.writestr(it, zi.read(it.filename))
+          # rebuild the aar with the cleaned classes.jar
+          newaar = "app/libs/libv2ray.aar.new"
+          with zipfile.ZipFile(aar) as zi, zipfile.ZipFile(newaar, "w", zipfile.ZIP_DEFLATED) as zo:
+              for it in zi.infolist():
+                  if it.filename == "classes.jar":
+                      zo.write(out, "classes.jar")
+                  else:
+                      zo.writestr(it, zi.read(it.filename))
+          os.replace(newaar, aar)
+          print("stripped go/ from libv2ray.aar")
+          PY
 
       - name: Build APK
         env:
